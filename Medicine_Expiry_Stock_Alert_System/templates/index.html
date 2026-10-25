@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Medicine Expiry & Stock Alert System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">INVENTORY MANAGEMENT</p>
+      <h1>Medicine Expiry & Stock Alert</h1>
+      <p class="subtitle">Track expiry dates, quantities and low-stock medicines in one place.</p>
+    </div>
+    <a class="button secondary" href="{{ url_for('export_csv') }}">Export CSV</a>
+  </header>
+
+  <main class="container">
+    <section class="stats">
+      <article class="stat-card"><span>Total medicine records</span><strong>{{ total_items }}</strong></article>
+      <article class="stat-card"><span>Total units in stock</span><strong>{{ total_units }}</strong></article>
+      <article class="stat-card danger"><span>Expired records</span><strong>{{ expired_count }}</strong></article>
+      <article class="stat-card warning"><span>Expiring within {{ warning_days }} days</span><strong>{{ expiring_count }}</strong></article>
+      <article class="stat-card warning"><span>Low-stock records</span><strong>{{ low_stock_count }}</strong></article>
+    </section>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="messages" aria-live="polite">
+          {% for category, message in messages %}
+            <div class="message {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="panel">
+      <div class="section-heading">
+        <div><p class="eyebrow">NEW RECORD</p><h2>Add a medicine</h2></div>
+      </div>
+      <form class="medicine-form" action="{{ url_for('add_medicine') }}" method="post">
+        <label>Medicine name <input name="name" maxlength="120" required placeholder="e.g. Paracetamol 500 mg"></label>
+        <label>Batch number <input name="batch_number" maxlength="80" placeholder="Optional batch ID"></label>
+        <label>Quantity (units) <input name="quantity" type="number" min="0" step="1" required placeholder="e.g. 50"></label>
+        <label>Expiry date <input name="expiry_date" type="date" min="2000-01-01" required></label>
+        <label>Low-stock threshold <input name="min_stock" type="number" min="0" step="1" value="10" required></label>
+        <label class="wide">Notes <input name="notes" maxlength="500" placeholder="Optional storage or inventory note"></label>
+        <div class="form-actions"><button class="button" type="submit">Add medicine</button></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading table-heading">
+        <div><p class="eyebrow">INVENTORY</p><h2>Medicine records</h2></div>
+        <input id="searchInput" class="search" type="search" placeholder="Search name or batch..." aria-label="Search medicines">
+      </div>
+      <div class="table-wrap">
+        <table id="medicineTable">
+          <thead>
+            <tr><th>Medicine</th><th>Batch</th><th>Quantity</th><th>Expiry date</th><th>Days left</th><th>Alerts</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+          {% for m in medicines %}
+            <tr data-search="{{ (m.name ~ ' ' ~ m.batch_number)|lower }}">
+              <td><strong>{{ m.name }}</strong>{% if m.notes %}<small>{{ m.notes }}</small>{% endif %}</td>
+              <td>{{ m.batch_number or "—" }}</td>
+              <td>{{ m.quantity }} <small>min {{ m.min_stock }}</small></td>
+              <td>{{ m.expiry_date }}</td>
+              <td>
+                {% if m.days_left < 0 %}<span class="pill danger">{{ -m.days_left }} days overdue</span>
+                {% elif m.days_left == 0 %}<span class="pill danger">Expires today</span>
+                {% else %}{{ m.days_left }}{% endif %}
+              </td>
+              <td class="alerts">
+                {% if m.expiry_status == "Expired" %}<span class="pill danger">Expired</span>
+                {% elif m.expiry_status == "Expiring soon" %}<span class="pill warning">Expiring soon</span>{% endif %}
+                {% if m.low_stock %}<span class="pill warning">Low stock</span>{% endif %}
+                {% if m.expiry_status == "OK" and not m.low_stock %}<span class="pill success">OK</span>{% endif %}
+              </td>
+              <td>
+                <form action="{{ url_for('delete_medicine', medicine_id=m.id) }}" method="post" onsubmit="return confirm('Delete this medicine record?')">
+                  <button class="text-button" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7" class="empty">No medicine records yet. Add your first medicine above.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote">Expiry alerts use today's system date. “Expiring soon” means expiry is within {{ warning_days }} days. Low stock means quantity is less than or equal to the medicine's threshold.</p>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="section-heading"><div><p class="eyebrow">ANALYTICS</p><h2>Stock overview</h2></div></div>
+      <img class="chart" src="{{ url_for('chart') }}" alt="Bar chart showing the top ten medicines by current stock">
+      <p class="footnote">Charts summarize inventory only; they do not provide medical advice. Verify inventory and expiry information against the actual package.</p>
+    </section>
+  </main>
+  <footer>Medicine Inventory Demo · Flask + SQLite + Pandas + NumPy + Matplotlib + Seaborn</footer>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
